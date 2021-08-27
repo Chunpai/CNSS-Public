@@ -1,22 +1,26 @@
 import copy
 import pickle
 
-from cnss.merge import merge_and_record
+from cnss.merge import merge_and_record, preprocess_graph
 from cnss.utils import berk_jones_scan_statistic, make_dir
 import numpy as np
 from multiprocessing import Pool
 from os import path
 from scipy.special import lambertw
+import networkx as nx
 
 
 class CNSS(object):
-    def __init__(self, G, alpha_list, result_dir, method="lower_bounds", **kwargs):
+    def __init__(self, G, alpha_list, result_dir, method="lower_bounds", C=None, **kwargs):
         """
-        G is the networkx graph object with node attribute "p" to store p-value
-        method: calibration method
+        G is the networkx graph object with node attribute "p" to store p-value.
+        C is the networkx graph object that contains the core of graph G, if C is not None, then
+            we apply the CNSS with core tree decomposition
+        method: calibration method or uncalibrated
         """
         self.result_dir = result_dir
         self.G = G
+        self.C = C
         self.average_degree = np.mean([self.G.degree[v] for v in self.G.nodes()])
         self.alpha_list = alpha_list
         self.max_score = 0.
@@ -34,15 +38,26 @@ class CNSS(object):
             file_path = "{}/alpha_prime/randomization_tests_alpha_prime.pkl".format(self.result_dir)
             if path.exists(file_path):
                 self.randomization_tests_alpha_prime = pickle.load(open(file_path, "rb"))
+        elif self.method == "uncalibrated":
+            # uncalibrated CNSS
+            pass
         else:
             raise ValueError
 
     def detect(self, seed=None, save_subgraph=False):
+        """
+        detect anomalous subgraph
+        @param seed:
+        @param save_subgraph:
+        @return:
+        """
         print("alpha list: {}".format(self.alpha_list))
+        G = self.G.subgraph(max(nx.connected_components(self.G), key=len)).copy()  # need copy()
         for alpha in self.alpha_list:
             print("current significance threshold alpha: {}".format(alpha))
-            G = copy.deepcopy(self.G)
-            candidate_results = merge_and_record(G, alpha, seed, save_subgraph)
+            new_G = copy.deepcopy(G)
+            new_G = preprocess_graph(new_G, alpha, self.C)
+            candidate_results = merge_and_record(new_G, seed, save_subgraph)
             for N, N_alpha in candidate_results:
                 if save_subgraph is True:
                     S = candidate_results[(N, N_alpha)]
@@ -81,6 +96,8 @@ class CNSS(object):
             alpha_prime = max(neighbor_analysis_alpha_prime, percolation_theory_alpha_prime)
         elif self.method == "randomization":
             alpha_prime = self.randomization_tests_alpha_prime[(N, alpha)]
+        elif self.method == "uncalibrated":
+            alpha_prime = alpha
         else:
             alpha_prime = None
         return alpha_prime
@@ -95,9 +112,10 @@ class CNSS(object):
             for v in G.nodes():
                 p_val = np.random.uniform(0, 1)
                 G.nodes[v]['p'] = p_val
+            CC = G.subgraph(max(nx.connected_components(G), key=len))
             for alpha in self.alpha_list:
-                para = (G, alpha, case_id, False)
-                print(para)
+                new_G = preprocess_graph(CC, alpha)
+                para = (new_G, case_id, False)
                 para_list.append(para)
         if num_cpus > 1:
             pool = Pool(processes=num_cpus)

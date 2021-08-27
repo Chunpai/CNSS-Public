@@ -9,6 +9,116 @@ import logging
 output_lock = Lock()
 
 
+def find_tree_subgraph(G, core_dict, tree_visited, root, alpha):
+    """
+    find tree subgraph that the root is in the core,
+    use BFS to find all adjacent positive periphery tree nodes
+
+    :param G:
+    :param core_dict: a dictionary of core nodes
+    :param tree_visited: used to track the tree nodes which have been explored
+    :param root: here denotes a node in the core
+    :param alpha: significant threshold
+
+    :return T_subgraph: a explored tree subgraph (networkx graph object which),
+    :return T_positive: all positive nodes in the explored tree, including the root in the core
+
+    """
+    T_visited = {root: 1}
+    queue = [root]
+    T_positive = {}
+    if G.nodes[root]['p'] <= alpha:
+        T_positive[root] = 1
+    while len(queue) != 0:
+        neighbors_list = list(G.neighbors(queue.pop(0)))
+        for nei in neighbors_list:
+            if nei not in core_dict and nei not in tree_visited and G.nodes[nei]['p'] <= alpha:
+                queue.append(nei)
+                tree_visited[nei] = 1
+                T_visited[nei] = 1
+                T_positive[nei] = 1
+    T_nodes = T_visited.keys()
+    # we need copy the subgraph, since the subgraph passed by reference
+    T_subgraph = G.subgraph(T_nodes).copy()
+    return T_subgraph, tree_visited, T_positive
+
+
+def compress(G, C, alpha):
+    """
+    compress the periphery tree nodes, and return the core as
+    a networkx Graph data object with compressed tree-nodes
+
+    @param G: networkx graph object with nodes attributes contained
+    @param C:
+    :return: a compressed core
+    """
+    p_values_dict = dict(G.nodes(data="p", default=1))
+    core_dict = dict([(n, 1) for n in C.nodes()])
+
+    pos_count = 0
+    neg_count = 0
+    G2 = G.copy()  # the G will be used later, and G2 will be changed.
+    tree_visited = {}
+    roots = []
+
+    # remove isolated core nodes
+    # if a core node has no neighbor in the core, then remove that node from the core dict
+    # since we don't want tree nodes are compressed into such kind of isolated core nodes
+    remove_node = []
+    for node in core_dict:
+        neighbors = list(G2.neighbors(node))
+        size = len(neighbors)
+        count = 0
+        for nei in neighbors:
+            if nei not in core_dict:
+                count += 1
+        if count == size:  # if current core node does not have core neighbors
+            remove_node.append(node)
+    for node in remove_node:
+        core_dict.pop(node)
+
+    # sort the core node based on the p-values, and iteratively explore the tree
+    # because we want positive tree nodes are compressed into positive core node first
+    sorted_core_list = sorted(core_dict, key=lambda x: p_values_dict[x])
+    for node in sorted_core_list:
+        neighbors = list(G2.neighbors(node))
+        children = []
+        for nei in neighbors:
+            # check if the core_node has positive neighboring tree nodes
+            if nei not in core_dict and nei not in tree_visited and G2.nodes[nei]['p'] <= alpha:
+                children.append(nei)
+        if len(children) != 0:  # if a core node connect to positive tree nodes
+            root = node
+            roots.append(root)  # means current core node has significant tree nodes connected
+            T_subgraph, tree_visited, T_positive = find_tree_subgraph(
+                G2, core_dict, tree_visited, root, alpha)
+
+            # merge all connected positive tree nodes into a single core node
+            for n in T_positive:
+                if n != root:
+                    T_subgraph.nodes[root]['pos'] += T_subgraph.nodes[n]['pos']
+                    T_subgraph.nodes[root]['neg'] += T_subgraph.nodes[n]['neg']
+                    T_subgraph.nodes[root]['p'] = min(T_subgraph.nodes[root]['p'],
+                                                      T_subgraph.nodes[n]['p'])
+            p_value = T_subgraph.nodes[root]['p']
+            pos_list = T_subgraph.nodes[root]['pos']
+            neg_list = T_subgraph.nodes[root]['neg']
+            # replace current root node with updated attributes
+            # G.add_node(root, p=p_value, pos=pos_list, neg=neg_list)
+            G.nodes[root]['p'] = p_value
+            G.nodes[root]['pos'] = pos_list
+            G.nodes[root]['neg'] = neg_list
+            pos_count += len(T_subgraph.nodes[root]['pos'])
+            neg_count += len(T_subgraph.nodes[root]['neg'])
+    # get the compressed core
+    nodes = [n for n in G.nodes()]
+    for n in nodes:
+        if n not in core_dict:
+            G.remove_node(n)
+    CC = G  # here CC nodes may have isolated nodes
+    return CC
+
+
 def get_pure_sig_supernodes_dict(G):
     """
     input is a networkx graph object, output is a dict of positive weight nodes
@@ -200,7 +310,7 @@ def apply_merge(C, highest_ratio, target_supernode, merged_neighbor):
     Given the target supernode and target method, we can apply the merge,
     and update the ordered ratio dict
 
-    :param C: networkx graph object, a compressed core
+    :param C: networkx graph object
     :param ordered_ratio_dict:
     :param highest_ratio:
     :param target_supernode:
@@ -237,10 +347,10 @@ def apply_merge(C, highest_ratio, target_supernode, merged_neighbor):
     return C
 
 
-def merge_and_record(G, alpha, seed=None, save_subgraph=False):
-    CC = G.subgraph(max(nx.connected_components(G), key=len))
-    CC = preprocess_graph(CC, alpha)
-    CC = merge_adjacent_sig(CC)
+def merge_and_record(G, seed=None, save_subgraph=False):
+    # CC = G.subgraph(max(nx.connected_components(G), key=len))
+    # CC = preprocess_graph(CC, alpha)
+    CC = merge_adjacent_sig(G)
 
     # start merge from the largest pure significant super node
     ordered_ratio_dict = get_ratio_list(CC)
@@ -301,30 +411,32 @@ def merge_and_record(G, alpha, seed=None, save_subgraph=False):
     return records
 
 
-def preprocess_graph(G, alpha):
-    CC = copy.deepcopy(G)
-    for v in CC.nodes():
-        p_val = CC.nodes[v]['p']
+def preprocess_graph(G, alpha, C=None):
+    for v in G.nodes():
+        p_val = G.nodes[v]['p']
         if p_val <= alpha:
-            CC.nodes[v]['pos'] = [v]
-            CC.nodes[v]['neg'] = []
-            CC.nodes[v]['pos_nei'] = set()
-            CC.nodes[v]['neg_nei'] = set()
+            G.nodes[v]['pos'] = [v]
+            G.nodes[v]['neg'] = []
+            G.nodes[v]['pos_nei'] = set()
+            G.nodes[v]['neg_nei'] = set()
         else:
-            CC.nodes[v]['pos'] = []
-            CC.nodes[v]['neg'] = [v]
-            CC.nodes[v]['pos_nei'] = set()
-            CC.nodes[v]['neg_nei'] = set()
-    for (v1, v2) in CC.edges():
-        v1_p_val = CC.nodes[v1]['p']
-        v2_p_val = CC.nodes[v2]['p']
-        if v1_p_val <= alpha:
-            CC.nodes[v2]['pos_nei'].add(v1)
-        else:
-            CC.nodes[v2]['neg_nei'].add(v1)
-        if v2_p_val <= alpha:
-            CC.nodes[v1]['pos_nei'].add(v2)
-        else:
-            CC.nodes[v1]['neg_nei'].add(v2)
+            G.nodes[v]['pos'] = []
+            G.nodes[v]['neg'] = [v]
+            G.nodes[v]['pos_nei'] = set()
+            G.nodes[v]['neg_nei'] = set()
 
-    return CC
+    if C:  # if core tree decomposition then tree compression
+        G = compress(G, C, alpha)
+    for (v1, v2) in G.edges():
+        v1_p_val = G.nodes[v1]['p']
+        v2_p_val = G.nodes[v2]['p']
+        if v1_p_val <= alpha:
+            G.nodes[v2]['pos_nei'].add(v1)
+        else:
+            G.nodes[v2]['neg_nei'].add(v1)
+        if v2_p_val <= alpha:
+            G.nodes[v1]['pos_nei'].add(v2)
+        else:
+            G.nodes[v1]['neg_nei'].add(v2)
+
+    return G

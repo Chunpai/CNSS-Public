@@ -14,6 +14,15 @@ if __name__ == "__main__":
     # step 1. obtain alpha-prime for H0
     file_path = "../data/{}/G.pkl".format(graph_name)
     G = pickle.load(open(file_path, "rb"))
+    # file_path = "../data/{}/C.pkl".format(graph_name)
+    # C = pickle.load(open(file_path, "rb"))
+    # file_path = "../data/{}/simulations/mu1.5/0_p_values_dict.pkl".format(graph_name)
+    # p_values_dict = pickle.load(open(file_path, "rb"))
+    # core_dict = dict([(n, 1) for n in C.nodes()])
+    # sorted_core_list = sorted(core_dict.keys(), key=lambda x: p_values_dict[x])
+    # for n in sorted_core_list:
+    #     print(n, p_values_dict[n])
+    # print(sorted_core_list)
     result_dir = "results/{}".format(graph_name)
     make_dir(result_dir)
     alpha_list = [i / 1000.0 for i in range(1, 10)] + [j / 100.0 for j in range(1, 10)]
