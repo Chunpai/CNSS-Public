@@ -10,7 +10,7 @@ from multiprocessing import Pool
 def evaluate(detected_subgraph, true_subgraph):
     """
     evaluate the detected subgraph
-    :param true_subgraph_dict: true_subgraph dict, keys are true nodes, value is 1
+    :param true_subgraph
     :param detected_subgraph: a list of detected nodes
     :return: precision, recall, and f1-score
     """
@@ -97,7 +97,7 @@ def run_single_case(graph_name, alter_type, case_id, method="lower_bounds", ctd=
             json.dump(out_dict, f, ensure_ascii=False, indent=4)
 
 
-def run_exp(graph_name, alter_type, method, ctd=False):
+def run_exp(graph_name, alter_type, method, ctd=False, num_cpus=50):
     """
     @param graph_name:
     @param alter_type:
@@ -121,5 +121,11 @@ if __name__ == "__main__":
     alter_type = "alpha_0.01_signal_5"
     # case_id = 0
     # run_single_case(graph_name, alter_type, case_id)
-    # run_exp(graph_name, alter_type, method="lower_bounds")
-    run_exp(graph_name, alter_type, method="uncalibrated", ctd=True)
+
+    run_exp(graph_name, alter_type, method="randomization_tests", num_cpus=25)
+    # run_exp(graph_name, alter_type, method="lower_bounds", num_cpus=25)
+    # run_exp(graph_name, alter_type, method="uncalibrated", num_cpus=25)
+
+    # run_exp(graph_name, alter_type, method="uncalibrated", ctd=True, num_cpus=25)
+    # run_exp(graph_name, alter_type, method="lower_bounds", ctd=True, num_cpus=25)
+    # run_exp(graph_name, alter_type, method="randomization_tests", ctd=True, num_cpus=25)

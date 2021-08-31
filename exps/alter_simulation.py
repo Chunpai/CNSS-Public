@@ -21,18 +21,34 @@ def random_walk(G, size, random_state):
     return ground_truth_subgraph
 
 
-def alter_piecewise_uniform_simulation(graph_name, alpha, signal_strength, case_id):
+def alter_piecewise_uniform_simulation(graph_name, true_size, alpha, signal_strength, case_id):
     np.random.seed(case_id)
     G = pickle.load(open("../data/{}/G.pkl".format(graph_name), "rb"))
-    num_nodes = G.number_of_nodes()
-    num_sig_nodes = num_nodes * alpha * signal_strength
-    true_subgraph = random_walk(G, num_sig_nodes, random_state=case_id)
+    true_subgraph = random_walk(G, true_size, random_state=case_id)
     p_values_dict = {}
+    sig_true = 0.
+    insig_true = 0.
+    sig_not_true = 0.
+    insig_not_true = 0.
     for node in G.nodes():
-        if node in true_subgraph:
-            p_val = np.random.uniform(0., alpha)
+        if node not in true_subgraph:
+            p_val = np.random.uniform(0., 1.)
+            if p_val <= alpha:
+                sig_not_true += 1
+            else:
+                insig_not_true += 1
         else:
-            p_val = np.random.uniform(alpha, 1.)
+            prob = signal_strength * alpha
+            cho = np.random.choice([0, 1], p=[1. - prob, prob])
+            if cho:
+                p_val = np.random.uniform(0., alpha)
+                # print("significant: {}".format(p_val))
+            else:
+                p_val = np.random.uniform(alpha, 1.)
+            if p_val <= alpha:
+                sig_true += 1
+            else:
+                insig_true += 1
         p_values_dict[node] = p_val
 
     output_dir = "../data/{}/simulations/alpha_{}_signal_{}".format(
@@ -43,21 +59,24 @@ def alter_piecewise_uniform_simulation(graph_name, alpha, signal_strength, case_
     pickle.dump(p_values_dict, open("{}/{}_p_values_dict.pkl".format(
         output_dir, case_id), "wb"))
     # return true_subgraph, p_values_dict
-    print(case_id)
-    print("subgraph", true_subgraph)
-    print("p values", p_values_dict)
+    # print(case_id)
+    # print("subgraph", true_subgraph)
+    # print("p values", p_values_dict)
+    print(case_id, sig_true, insig_true, sig_not_true, insig_not_true, signal_strength * alpha,
+          (sig_true + sig_not_true) / G.number_of_nodes())
 
 
 if __name__ == '__main__':
     graph_name = "wikivote"
+    true_size = 100
     alpha = 0.01
     para_list = []
     for signal_strength in [2, 3, 4, 5]:
         for case_id in range(50):
-            para = (graph_name, alpha, signal_strength, case_id)
+            para = (graph_name, true_size, alpha, signal_strength, case_id)
             para_list.append(para)
-            # alter_piecewise_uniform_simulation(*para)
-    pool = Pool(processes=60)
-    pool.starmap(alter_piecewise_uniform_simulation, para_list)
-    pool.close()
-    pool.join()
+            alter_piecewise_uniform_simulation(*para)
+    # pool = Pool(processes=50)
+    # pool.starmap(alter_piecewise_uniform_simulation, para_list)
+    # pool.close()
+    # pool.join()

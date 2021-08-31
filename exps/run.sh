@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH -p batch 
-#SBATCH -c 50
-#SBATCH --mem=180G
+#SBATCH -p ceashpc
+#SBATCH -c 25
+#SBATCH --mem=150G
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=cwang25@albany.edu
 #SBATCH -o logs/simulation.out

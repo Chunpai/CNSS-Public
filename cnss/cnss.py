@@ -94,7 +94,7 @@ class CNSS(object):
             else:
                 percolation_theory_alpha_prime = float(self.G.number_of_nodes() * p_infty.real) / N
             alpha_prime = max(neighbor_analysis_alpha_prime, percolation_theory_alpha_prime)
-        elif self.method == "randomization":
+        elif self.method == "randomization_tests":
             alpha_prime = self.randomization_tests_alpha_prime[(N, alpha)]
         elif self.method == "uncalibrated":
             alpha_prime = alpha
