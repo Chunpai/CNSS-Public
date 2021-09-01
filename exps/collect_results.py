@@ -11,11 +11,11 @@ def collect(graph_name, alter_type, method, ctd, case_id_list):
     for case_id in case_id_list:
         with open("{}/{}.json".format(output_dir, case_id), "r", encoding="utf-8") as f:
             result_dict = json.load(f)
-            print("{},{},{},{},{},{},{},{},{},{},{},{}".format(
-                result_dict["graph_name"],
-                result_dict["alter_type"],
-                result_dict["method"],
-                result_dict["core_tree_decomposition"],
+            print("{},{},{},{},{},{},{},{}".format(
+                # result_dict["graph_name"],
+                # result_dict["alter_type"],
+                # result_dict["method"],
+                # result_dict["core_tree_decomposition"],
                 result_dict["case_id"],
                 result_dict["N"],
                 result_dict["alpha"],
@@ -29,8 +29,9 @@ def collect(graph_name, alter_type, method, ctd, case_id_list):
 
 if __name__ == '__main__':
     graph_name = 'wikivote'
-    alter_type = "alpha_0.01_signal_5"
-    method = "randomization_tests"
+    alter_type = "alpha_0.01_signal_10"
+    # method = "randomization_tests"
+    method = "uncalibrated"
     ctd = False
-    case_id_list = [i for i in range(1, 50)]
+    case_id_list = [i for i in range(0, 50)]
     collect(graph_name, alter_type, method, ctd, case_id_list)

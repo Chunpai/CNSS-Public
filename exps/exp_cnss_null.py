@@ -26,7 +26,7 @@ if __name__ == "__main__":
     result_dir = "results/{}".format(graph_name)
     make_dir(result_dir)
     alpha_list = [i / 1000.0 for i in range(1, 10)] + [j / 100.0 for j in range(1, 10)]
-    cnss = CNSS(G, alpha_list, result_dir, method="lower_bounds")
+    cnss = CNSS(G, alpha_list, result_dir, methods="lower_bounds")
     # cases_list = list(range(200))
     # cnss.randomization_tests(cases_list=cases_list, num_cpus=60)
     cnss.neighbor_analysis()

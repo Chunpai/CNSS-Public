@@ -11,7 +11,7 @@ import networkx as nx
 
 
 class CNSS(object):
-    def __init__(self, G, alpha_list, result_dir, method="lower_bounds", C=None, **kwargs):
+    def __init__(self, G, alpha_list, result_dir, methods=None, C=None, **kwargs):
         """
         G is the networkx graph object with node attribute "p" to store p-value.
         C is the networkx graph object that contains the core of graph G, if C is not None, then
@@ -23,26 +23,27 @@ class CNSS(object):
         self.C = C
         self.average_degree = np.mean([self.G.degree[v] for v in self.G.nodes()])
         self.alpha_list = alpha_list
-        self.max_score = 0.
-        self.optimal_S = None
-        self.optimal_N = None
-        self.optimal_N_alpha = None
-        self.optimal_alpha = None
-        self.optimal_alpha_prime = None
-        self.method = method
-        if self.method == "lower_bounds":
-            file_path = "{}/alpha_prime/neighbor_analysis_alpha_prime.pkl".format(self.result_dir)
-            if path.exists(file_path):
-                self.neighbor_analysis_alpha_prime = pickle.load(open(file_path, "rb"))
-        elif self.method == "randomization_tests":
-            file_path = "{}/alpha_prime/randomization_tests_alpha_prime.pkl".format(self.result_dir)
-            if path.exists(file_path):
-                self.randomization_tests_alpha_prime = pickle.load(open(file_path, "rb"))
-        elif self.method == "uncalibrated":
-            # uncalibrated CNSS
-            pass
-        else:
-            raise ValueError
+
+        assert methods is not None
+        self.methods = methods
+        for method in self.methods:
+            if method == "lower_bounds" or method == "neighbor_analysis":
+                file_path = "{}/alpha_prime/neighbor_analysis_alpha_prime.pkl".format(
+                    self.result_dir)
+                if path.exists(file_path):
+                    self.neighbor_analysis_alpha_prime = pickle.load(open(file_path, "rb"))
+            elif method == "randomization_tests":
+                file_path = "{}/alpha_prime/randomization_tests_alpha_prime.pkl".format(
+                    self.result_dir)
+                if path.exists(file_path):
+                    self.randomization_tests_alpha_prime = pickle.load(open(file_path, "rb"))
+            elif method == "uncalibrated" or method == "percolation_theory":
+                # uncalibrated CNSS or use percolation theory as lower bound for calibration
+                pass
+            else:
+                raise ValueError
+
+        self.detection_results_dict = {}
 
     def detect(self, seed=None, save_subgraph=False):
         """
@@ -64,17 +65,20 @@ class CNSS(object):
                 else:
                     # NotImplemented
                     S = None
-                alpha_prime = self.get_alpha_prime(N, alpha)
-                calibrated_bj_score = berk_jones_scan_statistic(N, N_alpha, alpha_prime)
-                if calibrated_bj_score >= self.max_score:
-                    self.max_score = calibrated_bj_score
-                    self.optimal_S = S
-                    self.optimal_N_alpha = N_alpha
-                    self.optimal_N = N
-                    self.optimal_alpha = alpha
-                    self.optimal_alpha_prime = alpha_prime
+                for method in self.methods:
+                    if method not in self.detection_results_dict:
+                        self.detection_results_dict[method] = {"max_score": 0}
+                    alpha_prime = self.get_alpha_prime(N, alpha, method)
+                    calibrated_bj_score = berk_jones_scan_statistic(N, N_alpha, alpha_prime)
+                    if calibrated_bj_score >= self.detection_results_dict[method]["max_score"]:
+                        self.detection_results_dict[method]["max_score"] = calibrated_bj_score
+                        self.detection_results_dict[method]["optimal_S"] = S
+                        self.detection_results_dict[method]["optimal_N_alpha"] = N_alpha
+                        self.detection_results_dict[method]["optimal_N"] = N
+                        self.detection_results_dict[method]["optimal_alpha"] = alpha
+                        self.detection_results_dict[method]["optimal_alpha_prime"] = alpha_prime
 
-    def get_alpha_prime(self, N, alpha):
+    def get_alpha_prime(self, N, alpha, method):
         """
         loading the alpha-prime for N_alpha and N, which was pre-computed based on
             randomization tests, neighbor analysis, or percolation theory
@@ -85,7 +89,16 @@ class CNSS(object):
             where alpha_prime_1 denotes the lower bound obtained from neighbor analysis
             and alpha_prime_2 denotes the lower bound obtained from percolation theory
         """
-        if self.method == "lower_bounds":
+        if method == "neighbor_analysis":
+            alpha_prime = self.neighbor_analysis_alpha_prime[alpha][N]
+        elif method == "percolation_theory":
+            k = self.average_degree * 2 - 1e-5
+            p_infty = (lambertw(-alpha * np.exp(-alpha * k) * k) + alpha * k) / k
+            if N < self.G.number_of_nodes() * p_infty.real:
+                alpha_prime = 1
+            else:
+                alpha_prime = float(self.G.number_of_nodes() * p_infty.real) / N
+        elif method == "lower_bounds":
             neighbor_analysis_alpha_prime = self.neighbor_analysis_alpha_prime[alpha][N]
             k = self.average_degree * 2 - 1e-5
             p_infty = (lambertw(-alpha * np.exp(-alpha * k) * k) + alpha * k) / k
@@ -94,15 +107,21 @@ class CNSS(object):
             else:
                 percolation_theory_alpha_prime = float(self.G.number_of_nodes() * p_infty.real) / N
             alpha_prime = max(neighbor_analysis_alpha_prime, percolation_theory_alpha_prime)
-        elif self.method == "randomization_tests":
+        elif method == "randomization_tests":
             alpha_prime = self.randomization_tests_alpha_prime[(N, alpha)]
-        elif self.method == "uncalibrated":
+        elif method == "uncalibrated":
             alpha_prime = alpha
         else:
             alpha_prime = None
         return alpha_prime
 
     def randomization_tests(self, cases_list, num_cpus=1):
+        """
+        for null hypothesis preprocessing step
+        @param cases_list:
+        @param num_cpus:
+        @return:
+        """
         para_list = []
         pool_results = []
         for case_id in cases_list:
@@ -149,6 +168,11 @@ class CNSS(object):
         pickle.dump(randomization_tests_alpha_prime, open(file_name, "wb"))
 
     def interpolation(self, N_and_N_alpha_dict):
+        """
+        for null hypothesis preprocessing step
+        @param N_and_N_alpha_dict:
+        @return:
+        """
         num_nodes = self.G.number_of_nodes()
         mapping = {}
         # in mapping, keys are detected N, and for each detected N, it has keys
@@ -194,6 +218,10 @@ class CNSS(object):
         return mapping
 
     def neighbor_analysis(self):
+        """
+        for null hypothesis preprocessing step
+        @return:
+        """
         num_nodes = self.G.number_of_nodes()
         subgraph = {}  # key is node
         subgraph_neighbors = {}  # key is neighbor node, value is p-value

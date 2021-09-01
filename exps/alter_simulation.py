@@ -8,6 +8,7 @@ from cnss.utils import make_dir
 
 def random_walk(G, size, random_state):
     np.random.seed(random_state)
+    random.seed(random_state)
     length = G.number_of_nodes()
     current_vertex = np.random.randint(0, length)  # choose a random starting node
     ground_truth_subgraph = {current_vertex: 1}
@@ -23,6 +24,7 @@ def random_walk(G, size, random_state):
 
 def alter_piecewise_uniform_simulation(graph_name, true_size, alpha, signal_strength, case_id):
     np.random.seed(case_id)
+    random.seed(case_id)
     G = pickle.load(open("../data/{}/G.pkl".format(graph_name), "rb"))
     true_subgraph = random_walk(G, true_size, random_state=case_id)
     p_values_dict = {}
@@ -71,7 +73,7 @@ if __name__ == '__main__':
     true_size = 100
     alpha = 0.01
     para_list = []
-    for signal_strength in [2, 3, 4, 5]:
+    for signal_strength in [10, 25, 50, 75, 100]:
         for case_id in range(50):
             para = (graph_name, true_size, alpha, signal_strength, case_id)
             para_list.append(para)

@@ -30,7 +30,7 @@ def evaluate(detected_subgraph, true_subgraph):
     return prec, recall, f1
 
 
-def run_single_case(graph_name, alter_type, case_id, method="lower_bounds", ctd=False, exp=False):
+def run_single_case(graph_name, alter_type, case_id, methods=None, ctd=False, exp=False):
     """
     @param graph_name:
     @param alter_type: Gaussian or Piecewise uniform
@@ -63,41 +63,38 @@ def run_single_case(graph_name, alter_type, case_id, method="lower_bounds", ctd=
     result_dir = "results/{}".format(graph_name)
     make_dir(result_dir)
     alpha_list = [i / 1000.0 for i in range(1, 10)] + [j / 100.0 for j in range(1, 10)]
-    cnss = CNSS(G, alpha_list, result_dir, method=method, C=C)
+    cnss = CNSS(G, alpha_list, result_dir, methods=methods, C=C)
     cnss.detect(seed=case_id, save_subgraph=True)
-    print("subgraph: {}".format(cnss.optimal_S))
-    print("N: {}".format(cnss.optimal_N))
-    print("N_alpha: {}".format(cnss.optimal_N_alpha))
-    print("alpha: {}".format(cnss.optimal_alpha))
-    print("alpha prime: {}".format(cnss.optimal_alpha_prime))
-    prec, recall, f1 = evaluate(cnss.optimal_S, true_subgraph)
-    if run_exp:
-        if ctd:
-            output_dir = "{}/exp_outputs/{}/{}_ctd".format(result_dir, alter_type, method)
-        else:
-            output_dir = "{}/exp_outputs/{}/{}".format(result_dir, alter_type, method)
-        make_dir(output_dir)
-        out_dict = {
-            "graph_name": graph_name,
-            "alter_type": alter_type,
-            "method": method,
-            "core_tree_decomposition": ctd,
-            "case_id": case_id,
-            "N": cnss.optimal_N,
-            "N_alpha": cnss.optimal_N_alpha,
-            "alpha": cnss.optimal_alpha,
-            "alpha_prime": cnss.optimal_alpha_prime,
-            "precision": prec,
-            "recall": recall,
-            "f1": f1,
-            "detected_subgraph": sorted(list(set(cnss.optimal_S))),
-            "true_subgraph": sorted(list(set(true_subgraph)))
-        }
-        with open("{}/{}.json".format(output_dir, case_id), "w", encoding="utf-8") as f:
-            json.dump(out_dict, f, ensure_ascii=False, indent=4)
+    for method in methods:
+        detected_subgraph = cnss.detection_results_dict[method]["optimal_S"]
+        prec, recall, f1 = evaluate(detected_subgraph, true_subgraph)
+        if run_exp:
+            if ctd:
+                output_dir = "{}/exp_outputs/{}/{}_ctd".format(result_dir, alter_type, method)
+            else:
+                output_dir = "{}/exp_outputs/{}/{}".format(result_dir, alter_type, method)
+            make_dir(output_dir)
+            out_dict = {
+                "graph_name": graph_name,
+                "alter_type": alter_type,
+                "method": method,
+                "core_tree_decomposition": ctd,
+                "case_id": case_id,
+                "N": cnss.detection_results_dict[method]["optimal_N"],
+                "N_alpha": cnss.detection_results_dict[method]["optimal_N_alpha"],
+                "alpha": cnss.detection_results_dict[method]["optimal_alpha"],
+                "alpha_prime": cnss.detection_results_dict[method]["optimal_alpha_prime"],
+                "precision": prec,
+                "recall": recall,
+                "f1": f1,
+                "detected_subgraph": sorted(list(set(detected_subgraph))),
+                "true_subgraph": sorted(list(set(true_subgraph)))
+            }
+            with open("{}/{}.json".format(output_dir, case_id), "w", encoding="utf-8") as f:
+                json.dump(out_dict, f, ensure_ascii=False, indent=4)
 
 
-def run_exp(graph_name, alter_type, method, ctd=False, num_cpus=50):
+def run_exp(graph_name, alter_type, methods, ctd=False, num_cpus=50):
     """
     @param graph_name:
     @param alter_type:
@@ -106,7 +103,7 @@ def run_exp(graph_name, alter_type, method, ctd=False, num_cpus=50):
     exp = True
     para_list = []
     for case_id in range(50):
-        para = (graph_name, alter_type, case_id, method, ctd, exp)
+        para = (graph_name, alter_type, case_id, methods, ctd, exp)
         para_list.append(para)
     pool = Pool(processes=50)
     pool.starmap(run_single_case, para_list)
@@ -118,14 +115,19 @@ if __name__ == "__main__":
     # a demo to run the CNSS on a single case
     graph_name = 'wikivote'
     # alter_type = "mu1.5"
-    alter_type = "alpha_0.01_signal_5"
+    alter_type = "alpha_0.01_signal_100"
+    # alter_type = "alpha_0.01_signal_75"
+    # alter_type = "alpha_0.01_signal_50"
+    # alter_type = "alpha_0.01_signal_25"
+    # alter_type = "alpha_0.01_signal_10"
+
     # case_id = 0
     # run_single_case(graph_name, alter_type, case_id)
 
-    run_exp(graph_name, alter_type, method="randomization_tests", num_cpus=25)
-    # run_exp(graph_name, alter_type, method="lower_bounds", num_cpus=25)
-    # run_exp(graph_name, alter_type, method="uncalibrated", num_cpus=25)
-
-    # run_exp(graph_name, alter_type, method="uncalibrated", ctd=True, num_cpus=25)
-    # run_exp(graph_name, alter_type, method="lower_bounds", ctd=True, num_cpus=25)
-    # run_exp(graph_name, alter_type, method="randomization_tests", ctd=True, num_cpus=25)
+    methods = ["neighbor_analysis",
+               "percolation_theory",
+               "lower_bounds",
+               "randomization_tests",
+               "uncalibrated"]
+    # run_exp(graph_name, alter_type, methods=methods, num_cpus=25)
+    run_exp(graph_name, alter_type, methods=methods, ctd=True, num_cpus=25)
