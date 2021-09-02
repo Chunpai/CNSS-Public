@@ -8,10 +8,12 @@ from multiprocessing import Pool
 from os import path
 from scipy.special import lambertw
 import networkx as nx
+import time
 
 
 class CNSS(object):
-    def __init__(self, G, alpha_list, result_dir, methods=None, C=None, **kwargs):
+    def __init__(self, G, alpha_list, result_dir, methods=None, C=None, results_dict=None,
+                 **kwargs):
         """
         G is the networkx graph object with node attribute "p" to store p-value.
         C is the networkx graph object that contains the core of graph G, if C is not None, then
@@ -23,8 +25,8 @@ class CNSS(object):
         self.C = C
         self.average_degree = np.mean([self.G.degree[v] for v in self.G.nodes()])
         self.alpha_list = alpha_list
+        self.alpha_time_dict = {}
 
-        assert methods is not None
         self.methods = methods
         for method in self.methods:
             if method == "lower_bounds" or method == "neighbor_analysis":
@@ -43,7 +45,18 @@ class CNSS(object):
             else:
                 raise ValueError
 
-        self.detection_results_dict = {}
+        # if previous searching result exists, load previous results and avoid repeat searching
+        if results_dict is not None:
+            # notice that results_dict could be {} as well
+            self.detection_results_dict = results_dict
+            # remove the alpha from alpha_list which had been searched before
+            for method in self.detection_results_dict.keys():
+                self.alpha_time_dict = self.detection_results_dict[method]["alpha_time_dict"]
+                old_alpha_list = list(self.alpha_time_dict.keys())
+                self.alpha_list = list(set(alpha_list) - set(old_alpha_list))
+                break
+        else:
+            self.detection_results_dict = {}
 
     def detect(self, seed=None, save_subgraph=False):
         """
@@ -55,6 +68,7 @@ class CNSS(object):
         print("alpha list: {}".format(self.alpha_list))
         G = self.G.subgraph(max(nx.connected_components(self.G), key=len)).copy()  # need copy()
         for alpha in self.alpha_list:
+            start_time = time.time()
             print("current significance threshold alpha: {}".format(alpha))
             new_G = copy.deepcopy(G)
             new_G = preprocess_graph(new_G, alpha, self.C)
@@ -69,6 +83,8 @@ class CNSS(object):
                     if method not in self.detection_results_dict:
                         self.detection_results_dict[method] = {"max_score": 0}
                     alpha_prime = self.get_alpha_prime(N, alpha, method)
+                    if alpha_prime <= 0.:  # percolation theory may get non-positive
+                        continue
                     calibrated_bj_score = berk_jones_scan_statistic(N, N_alpha, alpha_prime)
                     if calibrated_bj_score >= self.detection_results_dict[method]["max_score"]:
                         self.detection_results_dict[method]["max_score"] = calibrated_bj_score
@@ -77,6 +93,8 @@ class CNSS(object):
                         self.detection_results_dict[method]["optimal_N"] = N
                         self.detection_results_dict[method]["optimal_alpha"] = alpha
                         self.detection_results_dict[method]["optimal_alpha_prime"] = alpha_prime
+            run_time = time.time() - start_time
+            self.alpha_time_dict[alpha] = run_time
 
     def get_alpha_prime(self, N, alpha, method):
         """

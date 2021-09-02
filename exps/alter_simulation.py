@@ -60,10 +60,6 @@ def alter_piecewise_uniform_simulation(graph_name, true_size, alpha, signal_stre
         output_dir, case_id), "wb"))
     pickle.dump(p_values_dict, open("{}/{}_p_values_dict.pkl".format(
         output_dir, case_id), "wb"))
-    # return true_subgraph, p_values_dict
-    # print(case_id)
-    # print("subgraph", true_subgraph)
-    # print("p values", p_values_dict)
     print(case_id, sig_true, insig_true, sig_not_true, insig_not_true, signal_strength * alpha,
           (sig_true + sig_not_true) / G.number_of_nodes())
 

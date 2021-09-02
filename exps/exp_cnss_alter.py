@@ -5,6 +5,7 @@ import pickle
 from cnss.utils import make_dir
 import numpy as np
 from multiprocessing import Pool
+from os import path
 
 
 def evaluate(detected_subgraph, true_subgraph):
@@ -30,7 +31,8 @@ def evaluate(detected_subgraph, true_subgraph):
     return prec, recall, f1
 
 
-def run_single_case(graph_name, alter_type, case_id, methods=None, ctd=False, exp=False):
+def run_single_case(graph_name, alter_type, alpha_list, case_id, methods=None, ctd=False,
+                    exp=False):
     """
     @param graph_name:
     @param alter_type: Gaussian or Piecewise uniform
@@ -60,10 +62,23 @@ def run_single_case(graph_name, alter_type, case_id, methods=None, ctd=False, ex
     else:
         C = None
 
+    # retrieve previous best searching results if there exist
     result_dir = "results/{}".format(graph_name)
     make_dir(result_dir)
-    alpha_list = [i / 1000.0 for i in range(1, 10)] + [j / 100.0 for j in range(1, 10)]
-    cnss = CNSS(G, alpha_list, result_dir, methods=methods, C=C)
+    results_dict = {}
+    for method in methods:
+        if ctd:
+            result_file = "{}/exp_outputs/{}/{}_ctd/{}.json".format(
+                result_dir, alter_type, method, case_id)
+        else:
+            result_file = "{}/exp_outputs/{}/{}/{}.json".format(
+                result_dir, alter_type, method, case_id)
+        if path.exists(result_file):
+            with open(result_file, "r", encoding="utf-8") as f:
+                result = json.load(f)
+            results_dict[method] = result
+
+    cnss = CNSS(G, alpha_list, result_dir, methods=methods, C=C, results_dict=results_dict)
     cnss.detect(seed=case_id, save_subgraph=True)
     for method in methods:
         detected_subgraph = cnss.detection_results_dict[method]["optimal_S"]
@@ -87,6 +102,7 @@ def run_single_case(graph_name, alter_type, case_id, methods=None, ctd=False, ex
                 "precision": prec,
                 "recall": recall,
                 "f1": f1,
+                "alpha_time_dict": cnss.alpha_time_dict,
                 "detected_subgraph": sorted(list(set(detected_subgraph))),
                 "true_subgraph": sorted(list(set(true_subgraph)))
             }
@@ -94,7 +110,7 @@ def run_single_case(graph_name, alter_type, case_id, methods=None, ctd=False, ex
                 json.dump(out_dict, f, ensure_ascii=False, indent=4)
 
 
-def run_exp(graph_name, alter_type, methods, ctd=False, num_cpus=50):
+def run_exp(graph_name, alter_type, alpha_list, methods, ctd=False, num_cpus=50):
     """
     @param graph_name:
     @param alter_type:
@@ -103,9 +119,9 @@ def run_exp(graph_name, alter_type, methods, ctd=False, num_cpus=50):
     exp = True
     para_list = []
     for case_id in range(50):
-        para = (graph_name, alter_type, case_id, methods, ctd, exp)
+        para = (graph_name, alter_type, alpha_list, case_id, methods, ctd, exp)
         para_list.append(para)
-    pool = Pool(processes=50)
+    pool = Pool(processes=num_cpus)
     pool.starmap(run_single_case, para_list)
     pool.close()
     pool.join()
@@ -121,13 +137,15 @@ if __name__ == "__main__":
     # alter_type = "alpha_0.01_signal_25"
     # alter_type = "alpha_0.01_signal_10"
 
+    alpha_list = [i / 1000.0 for i in range(1, 10)] + [j / 100.0 for j in range(1, 10)]
+
     # case_id = 0
-    # run_single_case(graph_name, alter_type, case_id)
+    # run_single_case(graph_name, alter_type, alpha_list, case_id)
 
     methods = ["neighbor_analysis",
                "percolation_theory",
                "lower_bounds",
                "randomization_tests",
                "uncalibrated"]
-    # run_exp(graph_name, alter_type, methods=methods, num_cpus=25)
-    run_exp(graph_name, alter_type, methods=methods, ctd=True, num_cpus=25)
+    run_exp(graph_name, alter_type, alpha_list, methods=methods, num_cpus=50)
+    # run_exp(graph_name, alter_type, alpha_list, methods=methods, ctd=True, num_cpus=25)
