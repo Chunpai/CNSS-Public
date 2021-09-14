@@ -166,9 +166,10 @@ class CNSS(object):
                 print("number of detected pairs: {}".format(len(result)))
                 pool_results.append(result)
 
+    def collect_alpha_prime(self):
         randomization_tests_results = {}
         for index, result in enumerate(pool_results):
-            alpha = para_list[index][1]
+            alpha = para_list[index][1]  # TODO
             N_map_N_alpha = self.interpolation(result)
             for N in N_map_N_alpha.keys():
                 N_alpha = N_map_N_alpha[N]["N_alpha"]

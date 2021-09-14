@@ -9,7 +9,8 @@ from cnss.utils import make_dir
 import numpy as np
 
 if __name__ == "__main__":
-    graph_name = 'wikivote'
+    # graph_name = 'wikivote'
+    graph_name = 'condmat'
 
     # step 1. obtain alpha-prime for H0
     file_path = "../data/{}/G.pkl".format(graph_name)
@@ -26,7 +27,7 @@ if __name__ == "__main__":
     result_dir = "results/{}".format(graph_name)
     make_dir(result_dir)
     alpha_list = [i / 1000.0 for i in range(1, 10)] + [j / 100.0 for j in range(1, 10)]
-    cnss = CNSS(G, alpha_list, result_dir, methods="lower_bounds")
-    # cases_list = list(range(200))
-    # cnss.randomization_tests(cases_list=cases_list, num_cpus=60)
-    cnss.neighbor_analysis()
+    cnss = CNSS(G, alpha_list, result_dir, methods=["randomization_tests"])
+    cases_list = list(range(200))
+    cnss.randomization_tests(cases_list=cases_list, num_cpus=50)
+    # cnss.neighbor_analysis()

@@ -129,7 +129,8 @@ def run_exp(graph_name, alter_type, alpha_list, methods, ctd=False, num_cpus=50)
 
 if __name__ == "__main__":
     # a demo to run the CNSS on a single case
-    graph_name = 'wikivote'
+    # graph_name = 'wikivote'
+    graph_name = 'condmat'
     # alter_type = "mu1.5"
     alter_type = "alpha_0.01_signal_100"
     # alter_type = "alpha_0.01_signal_75"

@@ -9,4 +9,5 @@
 #SBATCH --time=11-0:1 # The job should take 0 days, 0 hours, 1 minutes
 
 #python /network/rit/lab/ceashpc/chunpai/PycharmProjects/CNSS-Public/exps/alter_simulation.py
-python /network/rit/lab/ceashpc/chunpai/PycharmProjects/CNSS-Public/exps/exp_cnss_alter.py
+#python /network/rit/lab/ceashpc/chunpai/PycharmProjects/CNSS-Public/exps/exp_cnss_alter.py
+python /network/rit/lab/ceashpc/chunpai/PycharmProjects/CNSS-Public/exps/exp_cnss_null.py
